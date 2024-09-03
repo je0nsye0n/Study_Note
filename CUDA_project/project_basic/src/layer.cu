@@ -373,6 +373,49 @@ void BatchNorm2d(Tensor *in, Tensor *weight, Tensor *bias, Tensor *out) {
   }
 }
 
+__global__ void BatchNorm2d_kernel(float *in, float *weight, float *bias, float *out, 
+                                   float *mean, float *var, int C, int H, int W) {
+  
+  const float eps = 1e-5f;
+  const int tidx = blockDim.x * blockIdx.x + threadIdx.x;                               
+  const int tc = tidx / (H * W);
+  const int th = (tidx / W) % H;
+  const int tw = tidx % W;
+
+  if(tc >= C || th >= H || tw >= W) return;
+
+  // 3. Normalize with the calculated mean and variance
+  out[tc * H * W + th * W + tw] =
+    weight[tc] * 
+    (in[tc * H * W + th * W + tw] - mean[tc]) /
+    sqrt(var[tc] + eps) + bias[tc];
+} 
+
+__global__ void ComputeMeanVar(float *in, float *mean, float *var, int C, int H, int W) {
+  const int tc = blockIdx.x;
+  const int thw = threadIdx.x;
+  
+  extern __shared__ float buffer[];
+
+  buffer[thw] = in[tc * H * W + thw];
+
+  __syncthreads();
+
+  float sum = 0.0f;
+  for (int i = 0; i < H * W; ++i) {
+    sum += buffer[i];
+  }
+  mean[tc] = sum / (H * W);
+
+  __syncthreads();
+
+  float sum_var = 0.0f;
+  for (int i = 0; i < H * W; ++i) {
+    sum_var += (buffer[i] - mean[tc]) * (buffer[i] - mean[tc]);
+  }
+  var[tc] = sum_var / (H * W);
+}
+
 __global__ void BatchNorm2d_kernel(const float *in, const float *weight, const float *bias, float *out, int C, int H, int W) {
     const float eps = 1e-5f;
 

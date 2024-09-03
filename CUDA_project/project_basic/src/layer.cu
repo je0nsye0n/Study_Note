@@ -384,7 +384,7 @@ __global__ void BatchNorm2d_kernel(float *in, float *weight, float *bias, float 
 
   if(tc >= C || th >= H || tw >= W) return;
 
-  // 3. Normalize with the calculated mean and variance
+  // 3. Normalize
   out[tc * H * W + th * W + tw] =
     weight[tc] * 
     (in[tc * H * W + th * W + tw] - mean[tc]) /
